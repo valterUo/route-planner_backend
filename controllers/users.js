@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt')
 const usersRouter = require('express').Router()
 const User = require('../models/user')
+const Location = require('../models/location')
 
 usersRouter.get('/', async (request, response) => {
 	try {
@@ -50,6 +51,7 @@ usersRouter.post('/', async (request, response) => {
 
 		const saltRounds = 10
 		const passwordHash = await bcrypt.hash(user.password, saltRounds)
+
 		const newUser = new User({
 			username: user.username,
 			name: user.name,
@@ -58,6 +60,20 @@ usersRouter.post('/', async (request, response) => {
 		})
 
 		const savedUser = await newUser.save()
+
+		const location = new Location({
+			homeLocation:  null,
+			favouriteLocations: [],
+			favouriteStops: [],
+			favouriteLines: [],
+			user: savedUser._id
+		})
+
+		const savedLocation = await location.save()
+		const justSaveduser = await User.findById(savedUser._id)
+		justSaveduser.locations = savedLocation._id
+		await justSaveduser.save()
+
 		response.status(201).json(savedUser)
 	} catch(error) {
 		console.log(error)

@@ -46,24 +46,63 @@ locationRouter.post('/', async (request, response) => {
 	try {
 		const token = getTokenFrom(request)
 		const decodedToken = jwt.verify(token, process.env.SECRET)
+		console.log(decodedToken)
 
 		if (!token || !decodedToken.id) {
 			return response.status(401).json({ error: 'Token is missing or invalid.' })
 		}
 		const user = await User.findById(decodedToken.id)
+		const userLocations = await Location.findById(user.locations)
+		let savedFavouriteLocations = userLocations.favouriteLocations
+		let savedFavouriteStops = userLocations.favouriteStops
+		let savedFavouriteLines = userLocations.favouriteLines
+		let savedHomeLocation = userLocations.homeLocation
+
+		if(body.homeLocation !== null) {
+			savedHomeLocation = {
+				lat: body.homeLocation.lat,
+				lon: body.homeLocation.lon,
+				name: 'Home location: ' + body.homeLocation.name
+			}
+		}
+
+		//Avoiding duplicates
+		if(body.favouriteLocations !== null) {
+			if(userLocations.favouriteLocations.every(function(location) {
+				if(location.lat !== body.favouriteLocations.lat && location.lon !== body.favouriteLocations.lon) {
+					return true
+				}
+				return false
+			})) {
+				savedFavouriteLocations = userLocations.favouriteLocations.concat(body.favouriteLocations)
+			}
+		}
+		if(body.favouriteStops !== null) {
+			if(userLocations.favouriteStops.every(function(stop) {
+				return body.favouriteStops.gtfsId !== stop.gtfsId
+			})) {
+				savedFavouriteStops = userLocations.favouriteStops.concat(body.favouriteStops)
+			}
+		}
+		if(body.favouriteLines !== null) {
+			if(userLocations.favouriteLines.every(function(line) {
+				return line.id !== body.favouriteLines.id
+			})) {
+				savedFavouriteLines = userLocations.favouriteLines.concat(body.favouriteLines)
+			}
+		}
 
 		const location = new Location({
-			homeLocation: body.homeLocation,
-			favouriteLocations: body.favouriteLocations,
-			favouriteStops: body.favouriteStops,
-			favouriteLines: body.favouriteLines,
+			homeLocation: savedHomeLocation,
+			favouriteLocations: savedFavouriteLocations,
+			favouriteStops: savedFavouriteStops,
+			favouriteLines: savedFavouriteLines,
 			user: user._id
 		})
+		await Location.findByIdAndRemove(user.locations)
 		const savedLocation = await location.save()
-
 		user.locations = savedLocation._id
 		await user.save()
-
 		response.json(savedLocation)
 	} catch(error) {
 		console.log(error)
